@@ -15,9 +15,9 @@ import numpy as np
 from sklearn import svm
 from ..utils import metrics
 
-class SVM(object):
 
-    def __init__(self, penalty='l1', tol=0.1, C=1, dual=False, class_weight=None, 
+class SVM(object):
+    def __init__(self, penalty='l1', tol=0.1, C=1, dual=False, class_weight=None,
                  max_iter=100):
         """ The Invariants Mining model for anomaly detection
         Arguments
@@ -59,6 +59,52 @@ class SVM(object):
     def evaluate(self, X, y_true):
         print('====== Evaluation summary ======')
         y_pred = self.predict(X)
+        precision, recall, f1 = metrics(y_pred, y_true)
+        print('Precision: {:.3f}, recall: {:.3f}, F1-measure: {:.3f}\n'.format(precision, recall, f1))
+        return precision, recall, f1
+
+
+class OneClassSVM:
+    def __init__(self, nu=0.1, kernel='rbf', gamma='auto', max_iter=100):
+        """ The One-Class SVM model for anomaly detection
+        Arguments
+        ---------
+        See OneClassSVM API: https://scikit-learn.org/stable/modules/generated/sklearn.svm.OneClassSVM.html
+
+        Attributes
+        ----------
+            classifier: object, the classifier for anomaly detection
+        """
+        self.classifier = svm.OneClassSVM(nu=nu, kernel=kernel, gamma=gamma, max_iter=max_iter)
+
+    def fit(self, X):
+        """
+        Arguments
+        ---------
+            X: ndarray, the event count matrix of shape num_instances-by-num_events
+        """
+        print('====== Model summary ======')
+        self.classifier.fit(X)
+
+    def predict(self, X):
+        """ Predict anomalies with mined invariants
+
+        Arguments
+        ---------
+            X: the input event count matrix
+
+        Returns
+        -------
+            y_pred: ndarray, the predicted label vector of shape (num_instances,)
+        """
+
+        y_pred = self.classifier.predict(X)
+        return y_pred
+
+    def evaluate(self, X, y_true):
+        print('====== Evaluation summary ======')
+        y_pred = self.predict(X)
+        y_pred = np.where(y_pred == 1, 0, 1)
         precision, recall, f1 = metrics(y_pred, y_true)
         print('Precision: {:.3f}, recall: {:.3f}, F1-measure: {:.3f}\n'.format(precision, recall, f1))
         return precision, recall, f1
