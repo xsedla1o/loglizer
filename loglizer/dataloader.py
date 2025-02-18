@@ -6,13 +6,14 @@ Authors:
     LogPAI Team
 
 """
-
-import pandas as pd
 import os
-import numpy as np
 import re
-from sklearn.utils import shuffle
 from collections import OrderedDict
+
+import numpy as np
+import pandas as pd
+from sklearn.utils import shuffle
+
 
 def _split_data(x_data, y_data=None, train_ratio=0, split_type='uniform'):
     if split_type == 'uniform' and y_data is not None:
@@ -73,11 +74,21 @@ def load_HDFS(log_file, label_file=None, window='session', train_ratio=0.5, spli
         y_data = data['y_data']
         (x_train, y_train), (x_test, y_test) = _split_data(x_data, y_data, train_ratio, split_type)
 
+    elif log_file.endswith('.seqs.csv'):
+        data = pd.read_csv(
+            log_file, engine='c', na_filter=False, memory_map=True,
+            converters={'EventSequence': lambda x: [int(i) - 1 for i in x.split(" ")]},
+        )
+        x_data = data['EventSequence'].values
+        y_data = data['Label'].values
+        (x_train, y_train), (x_test, y_test) = _split_data(
+            x_data, y_data, train_ratio, split_type,
+        )
+
     elif log_file.endswith('.csv'):
         assert window == 'session', "Only window=session is supported for HDFS dataset."
         print("Loading", log_file)
-        struct_log = pd.read_csv(log_file, engine='c',
-                na_filter=False, memory_map=True)
+        struct_log = pd.read_csv(log_file, engine='c', na_filter=False, memory_map=True)
         data_dict = OrderedDict()
         for idx, row in struct_log.iterrows():
             blkId_list = re.findall(r'(blk_-?\d+)', row['Content'])
@@ -96,9 +107,11 @@ def load_HDFS(log_file, label_file=None, window='session', train_ratio=0.5, spli
             data_df['Label'] = data_df['BlockId'].apply(lambda x: 1 if label_dict[x] == 'Anomaly' else 0)
 
             # Split train and test data
-            (x_train, y_train), (x_test, y_test) = _split_data(data_df['EventSequence'].values, 
-                data_df['Label'].values, train_ratio, split_type)
-        
+            (x_train, y_train), (x_test, y_test) = _split_data(
+                data_df['EventSequence'].values,
+                data_df['Label'].values, train_ratio, split_type
+            )
+
             print(y_train.sum(), y_test.sum())
 
         if save_csv:
@@ -161,13 +174,40 @@ def slice_hdfs(x, y, window_size):
     return results_df[["SessionId", "EventSequence"]], results_df["Label"], results_df["SessionLabel"]
 
 
-
-def load_BGL(log_file, label_file=None, window='sliding', time_interval=60, stepping_size=60, 
+def load_BGL(log_file, split_type='sequential', window='sliding', time_interval=60,
+             stepping_size=60,
              train_ratio=0.8):
-    """  TODO
-
     """
+    TBD, for now only preprocessed csv input is supported
+    """
+    if log_file.endswith('.seqs.csv'):
+        data = pd.read_csv(
+            log_file, engine='c', na_filter=False, memory_map=True,
+            converters={'EventSequence': lambda x: [int(i) - 1 for i in x.split(" ")]},
+        )
+        x_data = data['EventSequence'].values
+        y_data = data['Label'].values
+        (x_train, y_train), (x_test, y_test) = _split_data(
+            x_data, y_data, train_ratio, split_type,
+        )
+    else:
+        raise NotImplementedError('currently supporting only .seqs.csv files!')
 
+    num_train = x_train.shape[0]
+    num_test = x_test.shape[0]
+    num_total = num_train + num_test
+    num_train_pos = sum(y_train)
+    num_test_pos = sum(y_test)
+    num_pos = num_train_pos + num_test_pos
+
+    print(f"Total: {num_total} instances, "
+          f"{num_pos} anomaly, {num_total - num_pos} normal")
+    print(f"Train: {num_train} instances, "
+          f"{num_train_pos} anomaly, {num_train - num_train_pos} normal")
+    print(f"Test: {num_test} instances, "
+          f"{num_test_pos} anomaly, {num_test - num_test_pos} normal\n")
+
+    return (x_train, y_train), (x_test, y_test)
 
 def bgl_preprocess_data(para, raw_data, event_mapping_data):
     """ split logs into sliding windows, built an event count matrix and get the corresponding label
