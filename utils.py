@@ -4,6 +4,7 @@ import pickle
 import gc
 from tqdm import tqdm
 
+
 def get_x_y(windows, content2tempalte):
     x = []
     y = []
@@ -16,12 +17,14 @@ def get_x_y(windows, content2tempalte):
             y_list.append(item["Label"])
         x.append(template_list)
         y.append(1 if sum(y_list) > 0 else 0)
-    return x, y 
+    return x, y
 
 
 def load_data(structure_file, pkl_path):
     parsed_result = pd.read_csv(structure_file, nrows=1)
-    content2tempalte = dict(zip(parsed_result["Content"], parsed_result["EventTemplate"]))
+    content2tempalte = dict(
+        zip(parsed_result["Content"], parsed_result["EventTemplate"])
+    )
 
     with open(os.path.join(pkl_path, "train_small.pkl"), "rb") as fr:
         train_windows = pickle.load(fr)[0:1]

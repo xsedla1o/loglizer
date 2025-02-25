@@ -1,12 +1,12 @@
 """
 The implementation of Invariants Mining model for anomaly detection.
 
-Authors: 
+Authors:
     LogPAI Team
 
-Reference: 
-    [1] Jian-Guang Lou, Qiang Fu, Shengqi Yang, Ye Xu, Jiang Li. Mining Invariants 
-        from Console Logs for System Problem Detection. USENIX Annual Technical 
+Reference:
+    [1] Jian-Guang Lou, Qiang Fu, Shengqi Yang, Ye Xu, Jiang Li. Mining Invariants
+        from Console Logs for System Problem Detection. USENIX Annual Technical
         Conference (ATC), 2010.
 
 """
@@ -15,19 +15,21 @@ import numpy as np
 from itertools import combinations
 from ..utils import metrics
 
-class InvariantsMiner(object):
 
-    def __init__(self, percentage=0.98, epsilon=0.5, longest_invarant=None, scale_list=[1,2,3]):
-        """ The Invariants Mining model for anomaly detection
+class InvariantsMiner(object):
+    def __init__(
+        self, percentage=0.98, epsilon=0.5, longest_invarant=None, scale_list=[1, 2, 3]
+    ):
+        """The Invariants Mining model for anomaly detection
 
         Attributes
         ----------
             percentage: float, percentage of samples satisfying the condition that |X_j * V_i| < epsilon
             epsilon: float, the threshold for estimating the invariant space
-            longest_invarant: int, the specified maximal length of invariant, default to None. Stop 
+            longest_invarant: int, the specified maximal length of invariant, default to None. Stop
                 searching when the invariant length is larger than longest_invarant.
             scale_list: list, the list used to scale the theta of float into integer
-            invariants_dict: dict, dictionary of invariants where key is the selected columns 
+            invariants_dict: dict, dictionary of invariants where key is the selected columns
                 and value is the weights the of invariant
         """
         self.percentage = percentage
@@ -42,12 +44,12 @@ class InvariantsMiner(object):
         ---------
             X: ndarray, the event count matrix of shape num_instances-by-num_events
         """
-        print('====== Model summary ======')
+        print("====== Model summary ======")
         invar_dim = self._estimate_invarant_space(X)
         self._invariants_search(X, invar_dim)
 
     def predict(self, X):
-        """ Predict anomalies with mined invariants
+        """Predict anomalies with mined invariants
 
         Arguments
         ---------
@@ -57,7 +59,7 @@ class InvariantsMiner(object):
         -------
             y_pred: ndarray, the predicted label vector of shape (num_instances,)
         """
-        
+
         y_sum = np.zeros(X.shape[0])
         for cols, theta in self.invariants_dict.items():
             y_sum += np.fabs(np.dot(X[:, cols], np.array(theta)))
@@ -65,14 +67,18 @@ class InvariantsMiner(object):
         return y_pred
 
     def evaluate(self, X, y_true):
-        print('====== Evaluation summary ======')
+        print("====== Evaluation summary ======")
         y_pred = self.predict(X)
         precision, recall, f1 = metrics(y_pred, y_true)
-        print('Precision: {:.3f}, recall: {:.3f}, F1-measure: {:.3f}\n'.format(precision, recall, f1))
+        print(
+            "Precision: {:.3f}, recall: {:.3f}, F1-measure: {:.3f}\n".format(
+                precision, recall, f1
+            )
+        )
         return precision, recall, f1
 
     def _estimate_invarant_space(self, X):
-        """ Estimate the dimension of invariant space using SVD decomposition
+        """Estimate the dimension of invariant space using SVD decomposition
 
         Arguments
         ---------
@@ -94,12 +100,12 @@ class InvariantsMiner(object):
             if zero_count / float(num_instances) < self.percentage:
                 break
             r += 1
-        print('Invariant space dimension: {}'.format(r))
+        print("Invariant space dimension: {}".format(r))
 
         return r
 
     def _invariants_search(self, X, r):
-        """ Mine invariant relationships from X
+        """Mine invariant relationships from X
 
         Arguments
         ---------
@@ -108,7 +114,9 @@ class InvariantsMiner(object):
         """
 
         num_instances, num_events = X.shape
-        invariants_dict = dict()  # save the mined Invariants(value) and its corresponding columns(key)
+        invariants_dict = (
+            dict()
+        )  # save the mined Invariants(value) and its corresponding columns(key)
         search_space = []  # only invariant candidates in this list are valid
 
         # invariant of only one column (all zero columns)
@@ -129,7 +137,9 @@ class InvariantsMiner(object):
         while len(item_list) != 0:
             if self.longest_invarant and len(item_list[0]) >= self.longest_invarant:
                 break
-            joined_item_list = self._join_set(item_list, length) # generate new invariant candidates
+            joined_item_list = self._join_set(
+                item_list, length
+            )  # generate new invariant candidates
             for items in joined_item_list:
                 if self._check_candi_valid(items, length, search_space):
                     search_space.append(items)
@@ -139,9 +149,12 @@ class InvariantsMiner(object):
                     continue
                 if item not in search_space:
                     continue
-                if not self._check_candi_valid(tuple(item), length, search_space) and length > 2:
+                if (
+                    not self._check_candi_valid(tuple(item), length, search_space)
+                    and length > 2
+                ):
                     search_space.remove(item)
-                    continue # an item must be superset of all other subitems in searchSpace, else skip
+                    continue  # an item must be superset of all other subitems in searchSpace, else skip
                 validity, scaled_theta = self._check_invar_validity(X, item)
                 if validity:
                     self._prune(invariants_dict.keys(), set(item), search_space)
@@ -155,11 +168,11 @@ class InvariantsMiner(object):
             if FLAG_break_loop:
                 break
             length += 1
-        print('Mined {} invariants: {}\n'.format(len(invariants_dict), invariants_dict))
+        print("Mined {} invariants: {}\n".format(len(invariants_dict), invariants_dict))
         self.invariants_dict = invariants_dict
 
     def _compute_eigenvector(self, X):
-        """ calculate the smallest eigenvalue and corresponding eigenvector (theta in the paper) 
+        """calculate the smallest eigenvalue and corresponding eigenvector (theta in the paper)
             for a given sub_matrix
 
         Arguments
@@ -182,9 +195,8 @@ class InvariantsMiner(object):
             FLAG_contain_zero = True
         return min_vec, FLAG_contain_zero
 
-
     def _check_invar_validity(self, X, selected_columns):
-        """ scale the eigenvector of float number into integer, and check whether the scaled number is valid
+        """scale the eigenvector of float number into integer, and check whether the scaled number is valid
 
         Arguments
         ---------
@@ -225,7 +237,7 @@ class InvariantsMiner(object):
             return validity, scaled_theta
 
     def _prune(self, valid_cols, new_item_set, search_space):
-        """ prune invalid combination of columns
+        """prune invalid combination of columns
 
         Arguments
         ---------
@@ -247,9 +259,8 @@ class InvariantsMiner(object):
                 if diff in search_space:
                     search_space.remove(diff)
 
-
     def _join_set(self, item_list, length):
-        """ Join a set with itself and returns the n-element (length) itemsets
+        """Join a set with itself and returns the n-element (length) itemsets
 
         Arguments
         ---------
@@ -274,9 +285,8 @@ class InvariantsMiner(object):
         return_list = sorted(return_list)
         return return_list
 
-
     def _check_candi_valid(self, item, length, search_space):
-        """ check whether an item's subitems are in searchspace
+        """check whether an item's subitems are in searchspace
 
         Arguments
         ---------
@@ -293,4 +303,3 @@ class InvariantsMiner(object):
             if sorted(list(subItem)) not in search_space:
                 return False
         return True
-

@@ -5,4 +5,3 @@ from .LR import LR
 from .SVM import SVM, OneClassSVM
 from .DecisionTree import DecisionTree
 from .IsolationForest import IsolationForest
-

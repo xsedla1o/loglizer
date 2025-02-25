@@ -1,7 +1,7 @@
 """
 The utility functions of loglizer
 
-Authors: 
+Authors:
     LogPAI Team
 
 """
@@ -11,7 +11,7 @@ import numpy as np
 
 
 def metrics(y_pred, y_true):
-    """ Calucate evaluation metrics for precision, recall, and f1.
+    """Calucate evaluation metrics for precision, recall, and f1.
 
     Arguments
     ---------
@@ -24,6 +24,7 @@ def metrics(y_pred, y_true):
         recall: float, recall value
         f1: float, f1 measure value
     """
-    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='binary')
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="binary"
+    )
     return precision, recall, f1
-
