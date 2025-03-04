@@ -97,11 +97,10 @@ class FeatureExtractor(object):
         for i in range(X_seq.shape[0]):
             event_counts = Counter(X_seq[i])
             X_counts.append(event_counts)
+        for event in set(self.events) - set(X_counts[0].keys()):
+            X_counts[0][event] = 0
         X_df = pd.DataFrame(X_counts)
         X_df = X_df.fillna(0)
-        empty_events = set(self.events) - set(X_df.columns)
-        for event in empty_events:
-            X_df[event] = [0] * len(X_df)
         X = X_df[self.events].values
         if self.oov:
             oov_vec = np.sum(
