@@ -32,7 +32,7 @@ def cyclic_read(data: np.ndarray, samples: int, offset: int) -> Tuple[np.ndarray
 
 def _split_data(x_data: np.ndarray, y_data: Optional[np.ndarray] = None,
                 train_ratio=0.0, split_type="uniform",
-                offset=0.0):
+                offset=0.0, val_ratio=0.01):
     if split_type == "uniform" and y_data is not None:
         pos_idx = y_data > 0
         x_pos = x_data[pos_idx]
@@ -57,7 +57,7 @@ def _split_data(x_data: np.ndarray, y_data: Optional[np.ndarray] = None,
             y_test = y_data[num_train:]
     elif split_type == "sequential_validation":
         num_train = int(train_ratio * x_data.shape[0])
-        num_validation = int(0.01 * x_data.shape[0])
+        num_validation = int(val_ratio * x_data.shape[0])
         num_test = x_data.shape[0] - num_train - num_validation
 
         train_begin = int(offset * x_data.shape[0])
