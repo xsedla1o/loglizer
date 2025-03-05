@@ -27,7 +27,7 @@ def cyclic_read(data: np.ndarray, samples: int, offset: int) -> Tuple[np.ndarray
         if end > data.shape[0]:
             raise ValueError(f"The number of samples {samples} is too large "
                              f"for the dataset {data.shape[0]}")
-        return np.append(data[offset:], data[:end]), end
+        return np.append(data[offset:], data[:end], axis=0), end
 
 
 def _split_data(x_data: np.ndarray, y_data: Optional[np.ndarray] = None,
