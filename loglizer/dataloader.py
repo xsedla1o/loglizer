@@ -10,29 +10,19 @@ Authors:
 import os
 import re
 from collections import OrderedDict
-from typing import Tuple, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 from sklearn.utils import shuffle
 
 
-def cyclic_read(data: np.ndarray, samples: int, offset: int) -> Tuple[np.ndarray, int]:
-    end = offset + samples
-    if end <= data.shape[0]:
-        return data[offset:end], end
-    else:
-        # join the end of the dataset to the beginning
-        end = end - data.shape[0]
-        if end > data.shape[0]:
-            raise ValueError(f"The number of samples {samples} is too large "
-                             f"for the dataset {data.shape[0]}")
-        return np.append(data[offset:], data[:end], axis=0), end
-
-
-def _split_data(x_data: np.ndarray, y_data: Optional[np.ndarray] = None,
-                train_ratio=0.0, split_type="uniform",
-                offset=0.0, val_ratio=0.01):
+def _split_data(
+    x_data: np.ndarray,
+    y_data: Optional[np.ndarray] = None,
+    train_ratio=0.0,
+    split_type="uniform",
+):
     if split_type == "uniform" and y_data is not None:
         pos_idx = y_data > 0
         x_pos = x_data[pos_idx]
@@ -55,29 +45,6 @@ def _split_data(x_data: np.ndarray, y_data: Optional[np.ndarray] = None,
         else:
             y_train = y_data[0:num_train]
             y_test = y_data[num_train:]
-    elif split_type == "sequential_validation":
-        num_train = int(train_ratio * x_data.shape[0])
-        num_validation = int(val_ratio * x_data.shape[0])
-        num_test = x_data.shape[0] - num_train - num_validation
-
-        train_begin = int(offset * x_data.shape[0])
-
-        x_train, train_end = cyclic_read(x_data, num_train, train_begin)
-        x_validation, validation_end = cyclic_read(x_data, num_validation, train_end)
-        x_test, _ = cyclic_read(x_data, num_test, validation_end)
-
-        if y_data is None:
-            y_train = None
-            y_validation = None
-            y_test = None
-        else:
-            y_train, _ = cyclic_read(y_data, num_train, train_begin)
-            y_validation, _ = cyclic_read(y_data, num_validation, train_end)
-            y_test, _ = cyclic_read(y_data, num_test, validation_end)
-
-        return (x_train, y_train), (x_validation, y_validation), (x_test, y_test)
-    elif split_type == "none":
-        return x_data, y_data
     else:
         raise ValueError(f"Unknown split type {split_type}")
     # Random shuffle
@@ -96,7 +63,6 @@ def load_HDFS(
     split_type="sequential",
     save_csv=False,
     window_size=0,
-        offset=0,
 ):
     """Load HDFS structured log into train and test data
 
@@ -124,8 +90,9 @@ def load_HDFS(
         data = np.load(log_file)
         x_data = data["x_data"]
         y_data = data["y_data"]
-        (x_train, y_train), (x_test, y_test) = _split_data(x_data, y_data, train_ratio,
-                                                           split_type, offset)
+        (x_train, y_train), (x_test, y_test) = _split_data(
+            x_data, y_data, train_ratio, split_type
+        )
 
     elif log_file.endswith(".seqs.csv"):
         data = pd.read_csv(
@@ -137,7 +104,9 @@ def load_HDFS(
         )
         x_data = data["EventSequence"].values
         y_data = data["Label"].values
-        return _split_data(x_data, y_data, train_ratio, split_type, offset)
+        (x_train, y_train), (x_test, y_test) = _split_data(
+            x_data, y_data, train_ratio, split_type
+        )
 
     elif log_file.endswith(".csv"):
         assert window == "session", "Only window=session is supported for HDFS dataset."
@@ -168,8 +137,11 @@ def load_HDFS(
 
             # Split train and test data
             (x_train, y_train), (x_test, y_test) = _split_data(
-                data_df["EventSequence"].values, data_df["Label"].values, train_ratio,
-                split_type, offset)
+                data_df["EventSequence"].values,
+                data_df["Label"].values,
+                train_ratio,
+                split_type,
+            )
 
             print(y_train.sum(), y_test.sum())
 
@@ -211,9 +183,9 @@ def load_HDFS(
                 )
             # Split training and validation set sequentially
             x_data = data_df["EventSequence"].values
-            (x_train, _), (x_test, _) = _split_data(x_data, train_ratio=train_ratio,
-                                                    split_type=split_type,
-                                                    offset=offset)
+            (x_train, _), (x_test, _) = _split_data(
+                x_data, train_ratio=train_ratio, split_type=split_type
+            )
             print(
                 "Total: {} instances, train: {} instances, test: {} instances".format(
                     x_data.shape[0], x_train.shape[0], x_test.shape[0]
@@ -295,8 +267,9 @@ def load_BGL(
         )
         x_data = data["EventSequence"].values
         y_data = data["Label"].values
-        (x_train, y_train), (x_test, y_test) = _split_data(x_data, y_data, train_ratio,
-                                                           split_type)
+        (x_train, y_train), (x_test, y_test) = _split_data(
+            x_data, y_data, train_ratio, split_type
+        )
     else:
         raise NotImplementedError("currently supporting only .seqs.csv files!")
 
