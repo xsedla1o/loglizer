@@ -45,6 +45,7 @@ class LogClustering(object):
         self.mode = mode
         self.num_bootstrap_samples = num_bootstrap_samples
         self.representatives = list()
+        self.np_representatives = None
         self.cluster_size_dict = dict()
 
     def fit(self, X):
@@ -64,7 +65,7 @@ class LogClustering(object):
     def predict(self, X):
         y_pred = np.zeros(X.shape[0])
         for i in range(X.shape[0]):
-            min_dist, min_index = self._get_min_cluster_dist(X[i, :])
+            min_dist, min_index = self._get_min_cluster_dist_vec(X[i, :])
             if min_dist > self.anomaly_threshold:
                 y_pred[i] = 1
         return y_pred
@@ -82,10 +83,11 @@ class LogClustering(object):
 
     def _offline_clustering(self, X):
         print("Starting offline clustering...")
-        p_dist = pdist(X, metric=self._distance_metric)
+        p_dist = pdist(X, metric="cosine")
         Z = linkage(p_dist, "complete")
         cluster_index = fcluster(Z, self.max_dist, criterion="distance")
         self._extract_representatives(X, cluster_index)
+        self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
         print("Processed {} instances.".format(X.shape[0]))
         print("Found {} clusters offline.\n".format(len(self.representatives)))
         # print('The representive vectors are:')
@@ -101,12 +103,13 @@ class LogClustering(object):
 
     def _online_clustering(self, X):
         print("Starting online clustering...")
+        self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
         for i in range(self.num_bootstrap_samples, X.shape[0]):
             if (i + 1) % 2000 == 0:
                 print("Processed {} instances.".format(i + 1))
             instance_vec = X[i, :]
             if len(self.representatives) > 0:
-                min_dist, clu_id = self._get_min_cluster_dist(instance_vec)
+                min_dist, clu_id = self._get_min_cluster_dist_vec(instance_vec)
                 if min_dist <= self.max_dist:
                     self.cluster_size_dict[clu_id] += 1
                     self.representatives[clu_id] = (
@@ -117,6 +120,7 @@ class LogClustering(object):
                     continue
             self.cluster_size_dict[len(self.representatives)] = 1
             self.representatives.append(instance_vec)
+            self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
         print("Processed {} instances.".format(X.shape[0]))
         print("Found {} clusters online.\n".format(len(self.representatives)))
         # print('The representive vectors are:')
@@ -142,4 +146,13 @@ class LogClustering(object):
             elif dist < min_dist:
                 min_dist = dist
                 min_index = i
+        return min_dist, min_index
+
+    def _get_min_cluster_dist_vec(self, instance_vec):
+        cluster_reps = self.np_representatives
+        norms = LA.norm(cluster_reps, axis=1) * LA.norm(instance_vec)
+        distances = 1 - np.dot(cluster_reps, instance_vec) / (norms + 1e-8)
+        distances = np.where(distances < 1e-8, 0, distances)
+        min_index = np.argmin(distances)
+        min_dist = distances[min_index]
         return min_dist, min_index
