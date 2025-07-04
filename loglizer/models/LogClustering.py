@@ -12,11 +12,10 @@ Reference:
 """
 
 import numpy as np
-import pprint
-from scipy.special import expit
 from numpy import linalg as LA
 from scipy.cluster.hierarchy import linkage, fcluster
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import pdist, cdist
+
 from ..utils import metrics
 
 
@@ -45,7 +44,7 @@ class LogClustering(object):
         self.mode = mode
         self.num_bootstrap_samples = num_bootstrap_samples
         self.representatives = list()
-        self.np_representatives = None
+        self.np_reps = None
         self.cluster_size_dict = dict()
 
     def fit(self, X):
@@ -63,11 +62,9 @@ class LogClustering(object):
                 self._online_clustering(X)
 
     def predict(self, X):
-        y_pred = np.zeros(X.shape[0])
-        for i in range(X.shape[0]):
-            min_dist, min_index = self._get_min_cluster_dist_vec(X[i, :])
-            if min_dist > self.anomaly_threshold:
-                y_pred[i] = 1
+        distances = cdist(X, self.np_reps, metric="cosine")
+        min_distances = np.min(distances, axis=1)
+        y_pred = (min_distances > self.anomaly_threshold).astype(int)
         return y_pred
 
     def evaluate(self, X, y_true):
@@ -87,7 +84,7 @@ class LogClustering(object):
         Z = linkage(p_dist, "complete")
         cluster_index = fcluster(Z, self.max_dist, criterion="distance")
         self._extract_representatives(X, cluster_index)
-        self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
+        self.np_reps = np.asarray(self.representatives, dtype=np.float64)
         print("Processed {} instances.".format(X.shape[0]))
         print("Found {} clusters offline.\n".format(len(self.representatives)))
         # print('The representive vectors are:')
@@ -103,28 +100,28 @@ class LogClustering(object):
 
     def _online_clustering(self, X):
         print("Starting online clustering...")
-        self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
+        self.np_reps = np.asarray(self.representatives, dtype=np.float64)
         for i in range(self.num_bootstrap_samples, X.shape[0]):
-            if (i + 1) % 2000 == 0:
-                print("Processed {} instances.".format(i + 1))
-            instance_vec = X[i, :]
-            if len(self.representatives) > 0:
-                min_dist, clu_id = self._get_min_cluster_dist_vec(instance_vec)
+            instance_vec = X[i, :].reshape(1, -1)
+            if self.np_reps.shape[0] > 0:
+                dists = cdist(self.np_reps, instance_vec, metric="cosine").flatten()
+                clu_id = np.argmin(dists)
+                min_dist = dists[clu_id]
+
                 if min_dist <= self.max_dist:
-                    self.cluster_size_dict[clu_id] += 1
-                    self.representatives[clu_id] = (
-                        self.representatives[clu_id]
-                        + (instance_vec - self.representatives[clu_id])
-                        / self.cluster_size_dict[clu_id]
-                    )
+                    new_size = self.cluster_size_dict[clu_id] + 1
+                    self.cluster_size_dict[clu_id] = new_size
+                    self.np_reps[clu_id] += (
+                        instance_vec.flatten() - self.np_reps[clu_id]
+                    ) / new_size
                     continue
-            self.cluster_size_dict[len(self.representatives)] = 1
-            self.representatives.append(instance_vec)
-            self.np_representatives = np.asarray(self.representatives, dtype=np.float64)
+
+            new_id = self.np_reps.shape[0]
+            self.cluster_size_dict[new_id] = 1
+            self.np_reps = np.vstack([self.np_reps, instance_vec])
+
         print("Processed {} instances.".format(X.shape[0]))
-        print("Found {} clusters online.\n".format(len(self.representatives)))
-        # print('The representive vectors are:')
-        # pprint.pprint(self.representatives.tolist())
+        print("Found {} clusters online.\n".format(self.np_reps.shape[0]))
 
     def _distance_metric(self, x1, x2):
         norm = LA.norm(x1) * LA.norm(x2)
@@ -149,7 +146,7 @@ class LogClustering(object):
         return min_dist, min_index
 
     def _get_min_cluster_dist_vec(self, instance_vec):
-        cluster_reps = self.np_representatives
+        cluster_reps = self.np_reps
         norms = LA.norm(cluster_reps, axis=1) * LA.norm(instance_vec)
         distances = 1 - np.dot(cluster_reps, instance_vec) / (norms + 1e-8)
         distances = np.where(distances < 1e-8, 0, distances)
