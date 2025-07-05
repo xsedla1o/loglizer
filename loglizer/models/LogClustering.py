@@ -61,11 +61,14 @@ class LogClustering(object):
             if X.shape[0] > self.num_bootstrap_samples:
                 self._online_clustering(X)
 
-    def predict(self, X):
-        distances = cdist(X, self.np_reps, metric="cosine")
-        min_distances = np.min(distances, axis=1)
-        y_pred = (min_distances > self.anomaly_threshold).astype(int)
-        return y_pred
+    def predict(self, X, batch_size=1024):
+        y_pred = []
+        for i in range(0, X.shape[0], batch_size):
+            batch = X[i : i + batch_size]
+            distances = cdist(batch, self.np_reps, metric="cosine")
+            min_distances = np.min(distances, axis=1)
+            y_pred.append((min_distances > self.anomaly_threshold).astype(int))
+        return np.concatenate(y_pred)
 
     def evaluate(self, X, y_true):
         print("====== Evaluation summary ======")
